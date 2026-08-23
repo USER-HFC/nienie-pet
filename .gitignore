@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+
+# Local-only character assets. Replace with files you are allowed to distribute.
+public/assets/nailong.glb
+public/icon.png
