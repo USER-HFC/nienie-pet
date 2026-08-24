@@ -192,6 +192,8 @@ a:focus-visible {
   content: attr(data-tooltip);
   font-size: 11px;
   font-weight: 650;
+  line-height: 1.25;
+  white-space: nowrap;
   opacity: 0;
   pointer-events: none;
   transform: translateY(-4px);
@@ -395,6 +397,18 @@ a:focus-visible {
   min-height: 0;
 }
 
+.model-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  overflow: hidden;
+}
+
+.model-viewport:not(.show-grab-feedback) .grab-feedback-layer {
+  display: none;
+}
+
 .pet-canvas {
   display: block;
   width: 100%;
@@ -413,6 +427,84 @@ a:focus-visible {
   cursor: grabbing;
 }
 
+.pet-canvas:focus-visible,
+.liquid-viewport:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 82%, white);
+  outline-offset: -4px;
+  border-radius: inherit;
+}
+
+.grab-feedback-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.grab-hover,
+.grab-origin,
+.grab-handle,
+.poke-feedback {
+  position: absolute;
+  left: var(--grab-pointer-x, -100px);
+  top: var(--grab-pointer-y, -100px);
+  border: 1px solid color-mix(in srgb, var(--accent) 86%, white);
+  border-radius: 999px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+}
+
+.grab-hover {
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%) scale(0.72);
+  transition: opacity 120ms ease, transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.model-viewport.show-grab-feedback.is-over-pet:not(.is-grabbing) .grab-hover {
+  opacity: 0.72;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.grab-origin {
+  left: var(--grab-origin-x, -100px);
+  top: var(--grab-origin-y, -100px);
+  width: 10px;
+  height: 10px;
+  background: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+
+.grab-handle {
+  width: 26px;
+  height: 26px;
+  background: color-mix(in srgb, var(--surface-solid) 46%, transparent);
+}
+
+.grab-tether {
+  position: absolute;
+  left: var(--grab-origin-x, -100px);
+  top: var(--grab-origin-y, -100px);
+  width: var(--grab-distance, 0);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 82%, white));
+  opacity: 0;
+  transform: rotate(var(--grab-angle, 0deg));
+  transform-origin: left center;
+}
+
+.model-viewport.show-grab-feedback.is-grabbing .grab-origin,
+.model-viewport.show-grab-feedback.is-grabbing .grab-handle,
+.model-viewport.show-grab-feedback.is-grabbing .grab-tether {
+  opacity: 0.9;
+}
+
+.poke-feedback {
+  width: 30px;
+  height: 30px;
+  pointer-events: none;
+}
+
 .liquid-viewport,
 .liquid-object {
   position: relative;
@@ -422,7 +514,12 @@ a:focus-visible {
 }
 
 .liquid-object canvas {
+  cursor: grab;
   outline: none;
+}
+
+.liquid-object canvas:active {
+  cursor: grabbing;
 }
 
 .mesh-stats {
@@ -497,13 +594,16 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   padding-left: 15px;
-  border: 1px solid transparent;
+  border: 1px solid var(--line);
   border-radius: 18px;
-  color: transparent;
+  color: var(--muted);
+  background: var(--surface);
+  opacity: 0.38;
   font-size: 11px;
   font-weight: 750;
   -webkit-app-region: drag;
-  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
+  backdrop-filter: blur(18px);
+  transition: opacity 180ms ease, color 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
 .desktop-pet:hover .desktop-drag-strip,
@@ -511,6 +611,7 @@ a:focus-visible {
   color: var(--text);
   border-color: var(--line);
   background: var(--surface);
+  opacity: 1;
   backdrop-filter: blur(18px);
 }
 
@@ -520,7 +621,7 @@ a:focus-visible {
 }
 
 .desktop-window-actions {
-  opacity: 0;
+  opacity: 0.42;
   transition: opacity 160ms ease;
 }
 
@@ -530,8 +631,8 @@ a:focus-visible {
 }
 
 .desktop-window-actions .icon-button {
-  width: 32px;
-  min-height: 32px;
+  width: 36px;
+  min-height: 36px;
 }
 
 .desktop-stage {
@@ -540,6 +641,7 @@ a:focus-visible {
 }
 
 .desktop-stage .pet-canvas,
+.desktop-stage .model-viewport,
 .desktop-stage .liquid-viewport,
 .desktop-stage .liquid-object {
   min-height: 100dvh;
@@ -550,13 +652,14 @@ a:focus-visible {
   bottom: 12px;
   left: 50%;
   z-index: 4;
+  gap: 3px;
   padding: 5px;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   background: var(--surface);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, 8px);
+  opacity: 0.38;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
   backdrop-filter: blur(18px);
   transition: opacity 180ms ease, transform 180ms ease;
 }
@@ -569,8 +672,21 @@ a:focus-visible {
 }
 
 .desktop-pet-controls .icon-button {
-  width: 36px;
-  min-height: 36px;
+  width: 40px;
+  min-height: 40px;
+}
+
+.desktop-pet-controls .icon-button[data-tooltip]::after {
+  top: -36px;
+  right: auto;
+  bottom: auto;
+  left: 50%;
+  transform: translate(-50%, 4px);
+}
+
+.desktop-pet-controls .icon-button[data-tooltip]:hover::after,
+.desktop-pet-controls .icon-button[data-tooltip]:focus-visible::after {
+  transform: translate(-50%, 0);
 }
 
 .desktop-mode-selector {
@@ -583,7 +699,7 @@ a:focus-visible {
 }
 
 .desktop-mode-selector button {
-  min-height: 30px;
+  min-height: 36px;
   padding: 0 10px;
   border: 0;
   border-radius: var(--radius-control);
@@ -594,6 +710,71 @@ a:focus-visible {
   font-weight: 720;
   white-space: nowrap;
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms ease, background 180ms ease;
+}
+
+.desktop-gesture-hint {
+  position: fixed;
+  bottom: 72px;
+  left: 50%;
+  z-index: 3;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 680;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  backdrop-filter: blur(16px);
+  animation: desktop-gesture-intro 3.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes desktop-gesture-intro {
+  0%, 62% {
+    opacity: 0.94;
+    transform: translate(-50%, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+
+@media (hover: none) {
+  .desktop-drag-strip,
+  .desktop-pet-controls,
+  .desktop-window-actions {
+    opacity: 1;
+  }
+
+  .desktop-window-actions .icon-button,
+  .desktop-pet-controls .icon-button,
+  .desktop-mode-selector button {
+    min-height: 44px;
+  }
+
+  .desktop-window-actions .icon-button,
+  .desktop-pet-controls .icon-button {
+    width: 44px;
+  }
+
+  .desktop-gesture-hint {
+    opacity: 0.9;
+    transform: translate(-50%, 0);
+    animation: none;
+  }
+}
+
+.desktop-pet.is-window-blurred .desktop-drag-strip,
+.desktop-pet.is-window-blurred .desktop-window-actions,
+.desktop-pet.is-window-blurred .desktop-pet-controls,
+.desktop-pet.is-window-blurred .desktop-gesture-hint {
+  visibility: hidden;
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 .desktop-mode-selector button.is-selected {
@@ -723,6 +904,12 @@ a:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .desktop-gesture-hint {
+    opacity: 0.9;
+    transform: translate(-50%, 0);
+    animation: none !important;
   }
 }
 

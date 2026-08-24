@@ -8,7 +8,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -105,6 +105,10 @@ export interface LiquidObjectElements {
 export interface LiquidObjectInstance {
   /** Update options live. Changing src loads the new asset. */
   setOptions: (options: LiquidObjectOptions) => void;
+  /** Rotate the camera around the object by a keyboard/button-sized step. */
+  orbitBy: (azimuth: number, polar?: number) => void;
+  /** Return the camera to its initial orbit. */
+  resetOrbit: () => void;
   /** Re-read canvas size. Call when the element is resized. */
   resize: () => void;
   /** Stop the loop and release all GPU resources. */
@@ -1939,6 +1943,21 @@ export function createLiquidObject(
   startLoop();
 
   return {
+    orbitBy(azimuth: number, polar = 0) {
+      const offset = camera.position.clone().sub(controls.target);
+      const spherical = new THREE.Spherical().setFromVector3(offset);
+      spherical.theta += azimuth;
+      spherical.phi = THREE.MathUtils.clamp(spherical.phi + polar, 0.15, Math.PI - 0.15);
+      camera.position.copy(controls.target).add(offset.setFromSpherical(spherical));
+      controls.update();
+      startLoop();
+    },
+    resetOrbit() {
+      camera.position.copy(CAMERA_DIR).multiplyScalar(config.cameraDistance);
+      camera.lookAt(controls.target);
+      controls.update();
+      startLoop();
+    },
     setOptions(next: LiquidObjectOptions) {
       let changed = false;
       for (const [key, value] of Object.entries(next)) {
@@ -2019,14 +2038,28 @@ export interface LiquidObjectProps extends LiquidObjectOptions {
   style?: React.CSSProperties;
 }
 
-export function LiquidObject({
+export interface LiquidObjectHandle {
+  orbitBy(azimuth: number, polar?: number): void;
+  resetOrbit(): void;
+}
+
+export const LiquidObject = forwardRef<LiquidObjectHandle, LiquidObjectProps>(function LiquidObject({
   className,
   style,
   ...options
-}: LiquidObjectProps) {
+}, forwardedRef) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const instanceRef = useRef<LiquidObjectInstance | null>(null);
   const [initialOptions] = useState(options);
+
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      orbitBy: (azimuth, polar) => instanceRef.current?.orbitBy(azimuth, polar),
+      resetOrbit: () => instanceRef.current?.resetOrbit(),
+    }),
+    [],
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -2057,7 +2090,7 @@ export function LiquidObject({
       />
     </div>
   );
-}
+});
 
 
 export default LiquidObject;

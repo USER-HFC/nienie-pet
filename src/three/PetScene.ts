@@ -25,8 +25,13 @@ interface PetSceneOptions {
 
 interface PointerGrab {
   plane: THREE.Plane;
+  localPoint: THREE.Vector3;
+  localNormal: THREE.Vector3;
   startClientX: number;
   startClientY: number;
+  clientX: number;
+  clientY: number;
+  maxDistance: number;
 }
 
 export class PetScene {
@@ -39,6 +44,7 @@ export class PetScene {
   private readonly raycaster = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
   private readonly resizeObserver: ResizeObserver;
+  private readonly interactionRoot: HTMLElement | null;
   private readonly activePointers = new Map<number, PointerGrab>();
   private readonly onStatus: PetSceneOptions["onStatus"];
   private readonly onGrabChange: PetSceneOptions["onGrabChange"];
@@ -48,9 +54,8 @@ export class PetScene {
   private mesh?: THREE.Mesh;
   private disposed = false;
   private reducedMotion: boolean;
+  private feel: FeelPreset = "bouncy";
   private clayMode = false;
-  private targetTiltX = 0;
-  private targetTiltY = 0;
   private baseScale = 1;
 
   constructor(options: PetSceneOptions) {
@@ -59,6 +64,7 @@ export class PetScene {
     this.onGrabChange = options.onGrabChange;
     this.compactFraming = options.compactFraming;
     this.reducedMotion = options.reducedMotion;
+    this.interactionRoot = this.canvas.parentElement;
 
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
@@ -93,6 +99,7 @@ export class PetScene {
   }
 
   setFeel(preset: FeelPreset): void {
+    this.feel = preset;
     this.solver?.setFeel(preset);
   }
 
@@ -107,10 +114,13 @@ export class PetScene {
   reset(): void {
     this.activePointers.clear();
     this.solver?.reset();
-    this.targetTiltX = 0;
-    this.targetTiltY = 0;
     this.root.rotation.set(0, 0, 0);
+    this.clearInteractionFeedback();
     this.onGrabChange(false);
+  }
+
+  poke(): void {
+    this.pokeAtCanvasCenter();
   }
 
   snapshot(): void {
@@ -127,6 +137,7 @@ export class PetScene {
     cancelAnimationFrame(this.animationFrame);
     this.resizeObserver.disconnect();
     this.unbindPointerEvents();
+    this.clearInteractionFeedback();
     this.renderer.dispose();
     this.scene.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
@@ -179,6 +190,7 @@ export class PetScene {
         this.root.add(gltf.scene);
         this.mesh = selectedMesh;
         this.solver = new SoftBodySolver(selectedMesh.geometry);
+        this.solver.setFeel(this.feel);
         const stats = this.solver.getStats();
         this.onStatus({
           state: "ready",
@@ -213,15 +225,23 @@ export class PetScene {
     if (!began) return;
 
     event.preventDefault();
+    this.canvas.focus({ preventScroll: true });
     const cameraDirection = this.camera.getWorldDirection(new THREE.Vector3()).normalize();
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(cameraDirection, intersection.point);
     this.activePointers.set(event.pointerId, {
       plane,
+      localPoint: localPoint.clone(),
+      localNormal: intersection.face.normal.clone().normalize(),
       startClientX: event.clientX,
       startClientY: event.clientY,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      maxDistance: 0,
     });
     this.canvas.setPointerCapture(event.pointerId);
     this.canvas.classList.add("is-grabbing");
+    this.interactionRoot?.classList.add("is-grabbing");
+    this.updateDragFeedback(event.clientX, event.clientY, event.clientX, event.clientY);
     this.onGrabChange(true);
   };
 
@@ -233,6 +253,7 @@ export class PetScene {
     if (!active) {
       const overPet = this.raycaster.intersectObject(this.mesh, false).length > 0;
       this.canvas.classList.toggle("is-over-pet", overPet);
+      this.updateHoverFeedback(event, overPet);
       return;
     }
 
@@ -244,23 +265,62 @@ export class PetScene {
 
     const dx = event.clientX - active.startClientX;
     const dy = event.clientY - active.startClientY;
-    this.targetTiltY = THREE.MathUtils.clamp(dx * 0.0012, -0.22, 0.22);
-    this.targetTiltX = THREE.MathUtils.clamp(dy * 0.0008, -0.12, 0.12);
+    active.clientX = event.clientX;
+    active.clientY = event.clientY;
+    active.maxDistance = Math.max(active.maxDistance, Math.hypot(dx, dy));
+    this.updateDragFeedback(
+      active.startClientX,
+      active.startClientY,
+      event.clientX,
+      event.clientY,
+    );
   };
 
   private readonly onPointerEnd = (event: PointerEvent): void => {
-    if (!this.activePointers.has(event.pointerId) || !this.solver) return;
+    const active = this.activePointers.get(event.pointerId);
+    if (!active || !this.solver) return;
     this.solver.endGrab(event.pointerId);
     this.activePointers.delete(event.pointerId);
     if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
 
+    const isTap = event.type === "pointerup" && active.maxDistance < 6;
+    if (isTap) {
+      const poked = this.solver.poke(
+        active.localPoint,
+        active.localNormal.clone().multiplyScalar(-1),
+      );
+      if (poked) this.playPokeFeedback(active.clientX, active.clientY);
+    }
+
     if (this.activePointers.size === 0) {
       if (this.clayMode) this.solver.bakeCurrentShape();
       this.canvas.classList.remove("is-grabbing");
+      this.interactionRoot?.classList.remove("is-grabbing");
       this.onGrabChange(false);
-      this.targetTiltX = 0;
-      this.targetTiltY = 0;
+      this.updateHoverFeedback(event, false);
+    } else {
+      const remaining = this.activePointers.values().next().value as PointerGrab | undefined;
+      if (remaining) {
+        this.updateDragFeedback(
+          remaining.startClientX,
+          remaining.startClientY,
+          remaining.clientX,
+          remaining.clientY,
+        );
+      }
     }
+  };
+
+  private readonly onPointerLeave = (): void => {
+    if (this.activePointers.size > 0) return;
+    this.canvas.classList.remove("is-over-pet");
+    this.interactionRoot?.classList.remove("is-over-pet");
+  };
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    if (!event.repeat) this.pokeAtCanvasCenter();
   };
 
   private updatePointer(event: PointerEvent): void {
@@ -270,12 +330,88 @@ export class PetScene {
     this.raycaster.setFromCamera(this.pointer, this.camera);
   }
 
+  private updateHoverFeedback(event: PointerEvent, overPet: boolean): void {
+    const root = this.interactionRoot;
+    if (!root) return;
+    const bounds = this.canvas.getBoundingClientRect();
+    root.style.setProperty("--grab-pointer-x", `${event.clientX - bounds.left}px`);
+    root.style.setProperty("--grab-pointer-y", `${event.clientY - bounds.top}px`);
+    root.classList.toggle("is-over-pet", overPet);
+  }
+
+  private updateDragFeedback(
+    originClientX: number,
+    originClientY: number,
+    pointerClientX: number,
+    pointerClientY: number,
+  ): void {
+    const root = this.interactionRoot;
+    if (!root) return;
+    const bounds = this.canvas.getBoundingClientRect();
+    const originX = originClientX - bounds.left;
+    const originY = originClientY - bounds.top;
+    const pointerX = pointerClientX - bounds.left;
+    const pointerY = pointerClientY - bounds.top;
+    const dx = pointerX - originX;
+    const dy = pointerY - originY;
+    root.style.setProperty("--grab-origin-x", `${originX}px`);
+    root.style.setProperty("--grab-origin-y", `${originY}px`);
+    root.style.setProperty("--grab-pointer-x", `${pointerX}px`);
+    root.style.setProperty("--grab-pointer-y", `${pointerY}px`);
+    root.style.setProperty("--grab-distance", `${Math.hypot(dx, dy)}px`);
+    root.style.setProperty("--grab-angle", `${Math.atan2(dy, dx)}rad`);
+  }
+
+  private playPokeFeedback(clientX: number, clientY: number): void {
+    const root = this.interactionRoot;
+    const pulse = root?.querySelector<HTMLElement>(".poke-feedback");
+    if (!root || !pulse) return;
+    const bounds = this.canvas.getBoundingClientRect();
+    pulse.style.left = `${clientX - bounds.left}px`;
+    pulse.style.top = `${clientY - bounds.top}px`;
+    pulse.getAnimations().forEach((animation) => animation.cancel());
+    pulse.animate(
+      this.reducedMotion
+        ? [{ opacity: 0.75 }, { opacity: 0 }]
+        : [
+            { opacity: 0.82, transform: "translate(-50%, -50%) scale(0.45)" },
+            { opacity: 0, transform: "translate(-50%, -50%) scale(1.7)" },
+          ],
+      { duration: this.reducedMotion ? 160 : 440, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" },
+    );
+  }
+
+  private pokeAtCanvasCenter(): void {
+    if (!this.mesh || !this.solver) return;
+    this.pointer.set(0, 0);
+    this.raycaster.setFromCamera(this.pointer, this.camera);
+    this.mesh.updateMatrixWorld(true);
+    const intersection = this.raycaster.intersectObject(this.mesh, false)[0];
+    if (!intersection?.face) return;
+    const localPoint = this.mesh.worldToLocal(intersection.point.clone());
+    const poked = this.solver.poke(
+      localPoint,
+      intersection.face.normal.clone().normalize().multiplyScalar(-1),
+    );
+    if (!poked) return;
+    if (this.clayMode) this.solver.bakeCurrentShape();
+    const bounds = this.canvas.getBoundingClientRect();
+    this.playPokeFeedback(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+  }
+
+  private clearInteractionFeedback(): void {
+    this.canvas.classList.remove("is-grabbing", "is-over-pet");
+    this.interactionRoot?.classList.remove("is-grabbing", "is-over-pet");
+  }
+
   private bindPointerEvents(): void {
     this.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.canvas.addEventListener("pointermove", this.onPointerMove);
     this.canvas.addEventListener("pointerup", this.onPointerEnd);
     this.canvas.addEventListener("pointercancel", this.onPointerEnd);
     this.canvas.addEventListener("lostpointercapture", this.onPointerEnd);
+    this.canvas.addEventListener("pointerleave", this.onPointerLeave);
+    this.canvas.addEventListener("keydown", this.onKeyDown);
   }
 
   private unbindPointerEvents(): void {
@@ -284,6 +420,8 @@ export class PetScene {
     this.canvas.removeEventListener("pointerup", this.onPointerEnd);
     this.canvas.removeEventListener("pointercancel", this.onPointerEnd);
     this.canvas.removeEventListener("lostpointercapture", this.onPointerEnd);
+    this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
+    this.canvas.removeEventListener("keydown", this.onKeyDown);
   }
 
   private resize(): void {
@@ -308,8 +446,8 @@ export class PetScene {
 
     this.solver?.step(delta, this.reducedMotion);
     const tiltEase = 1 - Math.exp(-delta * 8);
-    this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, this.targetTiltX, tiltEase);
-    this.root.rotation.y = THREE.MathUtils.lerp(this.root.rotation.y, this.targetTiltY, tiltEase);
+    this.root.rotation.x = THREE.MathUtils.lerp(this.root.rotation.x, 0, tiltEase);
+    this.root.rotation.y = THREE.MathUtils.lerp(this.root.rotation.y, 0, tiltEase);
 
     if (!this.reducedMotion && !this.solver?.hasActiveGrabs()) {
       this.root.position.y = Math.sin(elapsed * 1.45) * 0.018;

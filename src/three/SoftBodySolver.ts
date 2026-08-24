@@ -47,13 +47,13 @@ const FEEL_CONFIGS: Record<FeelPreset, FeelConfig> = {
     iterations: 5,
   },
   bouncy: {
-    damping: 0.968,
+    damping: 0.974,
     edgeCompliance: 1.4e-5,
     bendCompliance: 6e-5,
     volumeCompliance: 2.5e-8,
-    shapeCompliance: 8e-4,
-    grabCompliance: 1.2e-6,
-    grabRadius: 0.4,
+    shapeCompliance: 1.1e-3,
+    grabCompliance: 8e-7,
+    grabRadius: 0.46,
     iterations: 6,
   },
   soft: {
@@ -62,8 +62,8 @@ const FEEL_CONFIGS: Record<FeelPreset, FeelConfig> = {
     bendCompliance: 2.1e-4,
     volumeCompliance: 7e-8,
     shapeCompliance: 2.2e-3,
-    grabCompliance: 2.6e-6,
-    grabRadius: 0.48,
+    grabCompliance: 1.3e-6,
+    grabRadius: 0.56,
     iterations: 7,
   },
 };
@@ -73,8 +73,7 @@ const MAX_SUBSTEPS = 3;
 
 function smoothFalloff(value: number): number {
   const clamped = THREE.MathUtils.clamp(value, 0, 1);
-  const smooth = clamped * clamped * (3 - 2 * clamped);
-  return smooth * smooth;
+  return clamped * clamped * (3 - 2 * clamped);
 }
 
 function pairKey(a: number, b: number): string {
@@ -210,9 +209,47 @@ export class SoftBodySolver {
     if (!grab) return;
 
     const delta = target.clone().sub(grab.origin);
-    const limit = this.radius * 1.8;
+    const limit = this.radius * 1.45;
     if (delta.lengthSq() > limit * limit) delta.setLength(limit);
     grab.target.copy(grab.origin).add(delta);
+  }
+
+  poke(point: THREE.Vector3, direction: THREE.Vector3, strength = 0.07): boolean {
+    const normal = direction.clone();
+    if (normal.lengthSq() < 1e-8) return false;
+    normal.normalize();
+
+    const radius = this.radius * Math.max(this.feel.grabRadius * 0.72, 0.24);
+    const displacement = this.radius * strength;
+    let affected = false;
+
+    for (let i = 0; i < this.inverseMasses.length; i += 1) {
+      if (this.inverseMasses[i] === 0) continue;
+      const offset = i * 3;
+      const dx = this.positions[offset] - point.x;
+      const dy = this.positions[offset + 1] - point.y;
+      const dz = this.positions[offset + 2] - point.z;
+      const distance = Math.hypot(dx, dy, dz);
+      if (distance > radius) continue;
+
+      const amount = displacement * smoothFalloff(1 - distance / radius);
+      const x = normal.x * amount;
+      const y = normal.y * amount;
+      const z = normal.z * amount;
+      this.positions[offset] += x;
+      this.positions[offset + 1] += y;
+      this.positions[offset + 2] += z;
+      this.previousPositions[offset] += x;
+      this.previousPositions[offset + 1] += y;
+      this.previousPositions[offset + 2] += z;
+      this.predictedPositions[offset] += x;
+      this.predictedPositions[offset + 1] += y;
+      this.predictedPositions[offset + 2] += z;
+      affected = true;
+    }
+
+    if (affected) this.writeGeometry(true);
+    return affected;
   }
 
   endGrab(pointerId?: number): void {

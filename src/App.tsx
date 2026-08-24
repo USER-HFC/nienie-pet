@@ -1,6 +1,9 @@
 import {
+  ArrowLeft,
+  ArrowRight,
   ArrowCounterClockwise,
   Camera,
+  Crosshair,
   DesktopTower,
   Drop,
   EyeSlash,
@@ -34,21 +37,21 @@ const MODE_COPY: Record<PetMode, {
   squish: {
     headline: ["现实可抓，", "松手会弹。"],
     body: "抓住奶龙，把它拉长、压扁，再看它恢复原样。",
-    action: "直接拖动模型",
-    detail: "触屏支持双指同时捏拉",
+    action: "拖住哪里，就拉哪里",
+    detail: "轻点会戳一下 · 触屏支持双指捏拉",
     loading: "正在建立柔软回弹约束",
   },
   clay: {
     headline: ["捏出造型，", "松手留下。"],
     body: "把奶龙捏成新造型，每次松手都会保存当前形状。",
-    action: "捏出新造型",
-    detail: "点击恢复按钮可回到原样",
+    action: "拖动塑形，松手定型",
+    detail: "轻点留下凹痕 · 恢复按钮回到原样",
     loading: "正在准备橡皮泥网格",
   },
   liquid: {
     headline: ["指尖一动，", "光就流动。"],
     body: "移动指针搅动液体，让奶龙在折射和涟漪中流动。",
-    action: "移动指针搅动液体",
+    action: "移动搅动 · 拖动旋转",
     detail: "点击模型会激起一圈液体冲击",
     loading: "正在建立 GPU 液体场",
   },
@@ -59,6 +62,16 @@ function initialTheme(): Theme {
   const saved = window.localStorage.getItem("nienie-theme");
   if (saved === "light" || saved === "dark") return saved;
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function initialGrabGuides(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem("nienie-grab-guides") !== "false";
+}
+
+function initialWindowFocus(): boolean {
+  if (typeof document === "undefined") return true;
+  return document.hasFocus();
 }
 
 function feelForMode(mode: PetMode): FeelPreset {
@@ -80,7 +93,9 @@ export function App() {
   const [liquidVersion, setLiquidVersion] = useState(0);
   const [grabbing, setGrabbing] = useState(false);
   const [theme, setTheme] = useState<Theme>(initialTheme);
+  const [showGrabGuides, setShowGrabGuides] = useState(initialGrabGuides);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [windowFocused, setWindowFocused] = useState(initialWindowFocus);
   const [status, setStatus] = useState<SceneStatus>({
     state: "loading",
     message: MODE_COPY.squish.loading,
@@ -94,6 +109,10 @@ export function App() {
   }, [isDesktop, theme]);
 
   useEffect(() => {
+    window.localStorage.setItem("nienie-grab-guides", String(showGrabGuides));
+  }, [showGrabGuides]);
+
+  useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => setReducedMotion(media.matches);
     sync();
@@ -105,6 +124,18 @@ export function App() {
     if (!window.desktopPet) return;
     window.desktopPet.getState().then((state) => setAlwaysOnTop(state.alwaysOnTop));
   }, []);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    const syncFocus = () => setWindowFocused(document.hasFocus());
+    syncFocus();
+    window.addEventListener("focus", syncFocus);
+    window.addEventListener("blur", syncFocus);
+    return () => {
+      window.removeEventListener("focus", syncFocus);
+      window.removeEventListener("blur", syncFocus);
+    };
+  }, [isDesktop]);
 
   useEffect(() => {
     setGrabbing(false);
@@ -138,6 +169,9 @@ export function App() {
     viewportRef.current?.snapshot();
   };
 
+  const poke = () => viewportRef.current?.poke();
+  const rotateLiquid = (direction: -1 | 1) => liquidRef.current?.rotate(direction);
+
   const toggleAlwaysOnTop = async () => {
     if (!window.desktopPet) return;
     const nextValue = !alwaysOnTop;
@@ -157,13 +191,14 @@ export function App() {
     />
   ) : (
     <ModelViewport
-      key={mode}
+      key={`viewport-${mode}`}
       ref={viewportRef}
       modelUrl={modelUrl}
       compactFraming={isDesktop}
       feel={feelForMode(mode)}
       clayMode={mode === "clay"}
       reducedMotion={reducedMotion}
+      showGrabFeedback={showGrabGuides}
       onStatus={handleStatus}
       onGrabChange={handleGrabChange}
     />
@@ -195,9 +230,25 @@ export function App() {
     </div>
   );
 
+  const grabGuideToggle = (size: number) => (
+    <button
+      className={`icon-button ${showGrabGuides ? "is-active" : ""}`}
+      type="button"
+      aria-label={showGrabGuides ? "关闭抓取引导" : "显示抓取引导"}
+      aria-pressed={showGrabGuides}
+      data-tooltip={showGrabGuides ? "关闭抓取引导" : "显示抓取引导"}
+      onClick={() => setShowGrabGuides((value) => !value)}
+    >
+      <Crosshair size={size} weight={showGrabGuides ? "bold" : "regular"} />
+    </button>
+  );
+
   if (isDesktop) {
     return (
-      <main className={`desktop-pet is-${mode}`} aria-label="捏捏宠桌面窗口">
+      <main
+        className={`desktop-pet is-${mode} ${windowFocused ? "is-window-focused" : "is-window-blurred"}`}
+        aria-label="捏捏宠桌面窗口"
+      >
         <div className="desktop-drag-strip">
           <span>捏捏宠</span>
           <div className="desktop-window-actions">
@@ -226,7 +277,49 @@ export function App() {
           {viewport}
           {status.state === "loading" && <LoadingState compact message={MODE_COPY[mode].loading} />}
           {status.state === "error" && <ErrorState message={status.message} />}
+          <div key={`gesture-${mode}`} className="desktop-gesture-hint">
+            {mode === "liquid"
+              ? "移动搅动 · 拖动旋转"
+              : mode === "clay"
+                ? "拖动塑形 · 松手定型"
+                : "拖动拉扯 · 轻点戳一下"}
+          </div>
           <div className="desktop-pet-controls">
+            {mode === "liquid" ? (
+              <>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="向左旋转"
+                  data-tooltip="向左旋转"
+                  onClick={() => rotateLiquid(-1)}
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="向右旋转"
+                  data-tooltip="向右旋转"
+                  onClick={() => rotateLiquid(1)}
+                >
+                  <ArrowRight size={18} />
+                </button>
+              </>
+            ) : (
+              <>
+                {grabGuideToggle(18)}
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="轻捏一下"
+                  data-tooltip="轻捏一下"
+                  onClick={poke}
+                >
+                  <HandGrabbing size={18} />
+                </button>
+              </>
+            )}
             <button
               className="icon-button"
               type="button"
@@ -286,7 +379,13 @@ export function App() {
             )}
             <div>
               <strong>{grabbing ? "抓住了" : copy.action}</strong>
-              <span>{grabbing ? "继续拉，软体约束正在工作" : copy.detail}</span>
+              <span>
+                {grabbing
+                  ? mode === "clay"
+                    ? "继续拖动，松手会保留这个形状"
+                    : "继续拖动，松手会自然回弹"
+                  : copy.detail}
+              </span>
             </div>
           </div>
 
@@ -303,6 +402,41 @@ export function App() {
               <span>{status.message}</span>
             </div>
             <div className="stage-actions">
+              {mode === "liquid" ? (
+                <>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="向左旋转"
+                    data-tooltip="向左旋转"
+                    onClick={() => rotateLiquid(-1)}
+                  >
+                    <ArrowLeft size={19} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="向右旋转"
+                    data-tooltip="向右旋转"
+                    onClick={() => rotateLiquid(1)}
+                  >
+                    <ArrowRight size={19} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {grabGuideToggle(19)}
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="轻捏一下"
+                    data-tooltip="轻捏一下"
+                    onClick={poke}
+                  >
+                    <HandGrabbing size={19} />
+                  </button>
+                </>
+              )}
               <button
                 className="icon-button"
                 type="button"
