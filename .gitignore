@@ -3,6 +3,8 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+.playwright-cli/
+output/playwright/
 
 # Local-only character assets. Replace with files you are allowed to distribute.
 public/assets/nailong.glb

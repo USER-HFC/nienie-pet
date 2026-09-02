@@ -14,6 +14,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/addons/libs/meshopt_decoder.module.js";
 import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
 import { toCreasedNormals } from "three/addons/utils/BufferGeometryUtils.js";
 import { createRectCache } from "../rect-cache";
@@ -1268,6 +1269,7 @@ export function createLiquidObject(
   const draco = new DRACOLoader();
   draco.setDecoderPath(config.dracoDecoderPath);
   loader.setDRACOLoader(draco);
+  loader.setMeshoptDecoder(MeshoptDecoder);
 
   function applyFit() {
     if (!model) return;

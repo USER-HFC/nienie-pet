@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { SoftBodySolver, type FeelPreset } from "./SoftBodySolver";
 
 export type SceneLoadState = "loading" | "ready" | "error";
@@ -149,6 +150,7 @@ export class PetScene {
 
   private loadModel(url: string): void {
     const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
     loader.load(
       url,
       (gltf) => {

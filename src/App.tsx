@@ -8,11 +8,13 @@ import {
   Drop,
   EyeSlash,
   HandGrabbing,
+  MagicWand,
   Moon,
   PushPin,
   Sun,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AiModelDialog } from "./components/AiModelDialog";
 import { LiquidViewport, type LiquidViewportHandle } from "./components/LiquidViewport";
 import { ModelViewport, type ModelViewportHandle } from "./components/ModelViewport";
 import type { SceneStatus } from "./three/PetScene";
@@ -74,6 +76,12 @@ function initialWindowFocus(): boolean {
   return document.hasFocus();
 }
 
+function initialModelUrl(defaultUrl: string): string {
+  if (!window.desktopPet) return defaultUrl;
+  const saved = window.localStorage.getItem("nienie-active-model");
+  return saved?.startsWith("nienie-model://local/") ? saved : defaultUrl;
+}
+
 function feelForMode(mode: PetMode): FeelPreset {
   return mode === "clay" ? "soft" : "bouncy";
 }
@@ -85,10 +93,12 @@ export function App() {
     () => new URLSearchParams(window.location.search).get("desktop") === "1",
     [],
   );
-  const modelUrl = useMemo(
+  const defaultModelUrl = useMemo(
     () => new URL(`${import.meta.env.BASE_URL}assets/nailong.glb`, window.location.href).href,
     [],
   );
+  const [modelUrl, setModelUrl] = useState(() => initialModelUrl(defaultModelUrl));
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
   const [mode, setMode] = useState<PetMode>("squish");
   const [liquidVersion, setLiquidVersion] = useState(0);
   const [grabbing, setGrabbing] = useState(false);
@@ -172,6 +182,22 @@ export function App() {
   const poke = () => viewportRef.current?.poke();
   const rotateLiquid = (direction: -1 | 1) => liquidRef.current?.rotate(direction);
 
+  const useGeneratedModel = (url: string) => {
+    setStatus({ state: "loading", message: "正在装载新桌宠" });
+    setModelUrl(url);
+    if (window.desktopPet && url.startsWith("nienie-model://local/")) {
+      window.localStorage.setItem("nienie-active-model", url);
+    }
+    setLiquidVersion((value) => value + 1);
+  };
+
+  const useDefaultModel = () => {
+    setStatus({ state: "loading", message: MODE_COPY[mode].loading });
+    setModelUrl(defaultModelUrl);
+    window.localStorage.removeItem("nienie-active-model");
+    setLiquidVersion((value) => value + 1);
+  };
+
   const toggleAlwaysOnTop = async () => {
     if (!window.desktopPet) return;
     const nextValue = !alwaysOnTop;
@@ -181,6 +207,7 @@ export function App() {
 
   const viewport = mode === "liquid" ? (
     <LiquidViewport
+      key={`liquid-${modelUrl}-${liquidVersion}`}
       ref={liquidRef}
       modelUrl={modelUrl}
       compactFraming={isDesktop}
@@ -191,7 +218,7 @@ export function App() {
     />
   ) : (
     <ModelViewport
-      key={`viewport-${mode}`}
+      key={`viewport-${mode}-${modelUrl}`}
       ref={viewportRef}
       modelUrl={modelUrl}
       compactFraming={isDesktop}
@@ -245,94 +272,113 @@ export function App() {
 
   if (isDesktop) {
     return (
-      <main
-        className={`desktop-pet is-${mode} ${windowFocused ? "is-window-focused" : "is-window-blurred"}`}
-        aria-label="捏捏宠桌面窗口"
-      >
-        <div className="desktop-drag-strip">
-          <span>捏捏宠</span>
-          <div className="desktop-window-actions">
-            <button
-              className={`icon-button ${alwaysOnTop ? "is-active" : ""}`}
-              type="button"
-              aria-label="切换窗口置顶"
-              data-tooltip={alwaysOnTop ? "取消置顶" : "保持置顶"}
-              onClick={toggleAlwaysOnTop}
-            >
-              <PushPin size={17} weight={alwaysOnTop ? "fill" : "regular"} />
-            </button>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="隐藏桌宠"
-              data-tooltip="隐藏到托盘"
-              onClick={() => window.desktopPet?.hide()}
-            >
-              <EyeSlash size={18} />
-            </button>
+      <>
+        <main
+          className={`desktop-pet is-${mode} ${windowFocused ? "is-window-focused" : "is-window-blurred"}`}
+          aria-label="捏捏宠桌面窗口"
+        >
+          <div className="desktop-drag-strip">
+            <span>捏捏宠</span>
+            <div className="desktop-window-actions">
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="AI 生成桌宠"
+                data-tooltip="AI 生成桌宠"
+                onClick={() => setAiDialogOpen(true)}
+              >
+                <MagicWand size={17} weight="fill" />
+              </button>
+              <button
+                className={`icon-button ${alwaysOnTop ? "is-active" : ""}`}
+                type="button"
+                aria-label="切换窗口置顶"
+                data-tooltip={alwaysOnTop ? "取消置顶" : "保持置顶"}
+                onClick={toggleAlwaysOnTop}
+              >
+                <PushPin size={17} weight={alwaysOnTop ? "fill" : "regular"} />
+              </button>
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="隐藏桌宠"
+                data-tooltip="隐藏到托盘"
+                onClick={() => window.desktopPet?.hide()}
+              >
+                <EyeSlash size={18} />
+              </button>
+            </div>
           </div>
-        </div>
 
-        <section className="desktop-stage">
-          {viewport}
-          {status.state === "loading" && <LoadingState compact message={MODE_COPY[mode].loading} />}
-          {status.state === "error" && <ErrorState message={status.message} />}
-          <div key={`gesture-${mode}`} className="desktop-gesture-hint">
-            {mode === "liquid"
-              ? "移动搅动 · 拖动旋转"
-              : mode === "clay"
-                ? "拖动塑形 · 松手定型"
-                : "拖动拉扯 · 轻点戳一下"}
-          </div>
-          <div className="desktop-pet-controls">
-            {mode === "liquid" ? (
-              <>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="向左旋转"
-                  data-tooltip="向左旋转"
-                  onClick={() => rotateLiquid(-1)}
-                >
-                  <ArrowLeft size={18} />
-                </button>
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="向右旋转"
-                  data-tooltip="向右旋转"
-                  onClick={() => rotateLiquid(1)}
-                >
-                  <ArrowRight size={18} />
-                </button>
-              </>
-            ) : (
-              <>
-                {grabGuideToggle(18)}
-                <button
-                  className="icon-button"
-                  type="button"
-                  aria-label="轻捏一下"
-                  data-tooltip="轻捏一下"
-                  onClick={poke}
-                >
-                  <HandGrabbing size={18} />
-                </button>
-              </>
-            )}
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="恢复原样"
-              data-tooltip="恢复原样"
-              onClick={reset}
-            >
-              <ArrowCounterClockwise size={18} />
-            </button>
-            {modeSelector(true)}
-          </div>
-        </section>
-      </main>
+          <section className="desktop-stage">
+            {viewport}
+            {status.state === "loading" && <LoadingState compact message={MODE_COPY[mode].loading} />}
+            {status.state === "error" && <ErrorState message={status.message} />}
+            <div key={`gesture-${mode}`} className="desktop-gesture-hint">
+              {mode === "liquid"
+                ? "移动搅动 · 拖动旋转"
+                : mode === "clay"
+                  ? "拖动塑形 · 松手定型"
+                  : "拖动拉扯 · 轻点戳一下"}
+            </div>
+            <div className="desktop-pet-controls">
+              {mode === "liquid" ? (
+                <>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="向左旋转"
+                    data-tooltip="向左旋转"
+                    onClick={() => rotateLiquid(-1)}
+                  >
+                    <ArrowLeft size={18} />
+                  </button>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="向右旋转"
+                    data-tooltip="向右旋转"
+                    onClick={() => rotateLiquid(1)}
+                  >
+                    <ArrowRight size={18} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  {grabGuideToggle(18)}
+                  <button
+                    className="icon-button"
+                    type="button"
+                    aria-label="轻捏一下"
+                    data-tooltip="轻捏一下"
+                    onClick={poke}
+                  >
+                    <HandGrabbing size={18} />
+                  </button>
+                </>
+              )}
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="恢复原样"
+                data-tooltip="恢复原样"
+                onClick={reset}
+              >
+                <ArrowCounterClockwise size={18} />
+              </button>
+              {modeSelector(true)}
+            </div>
+          </section>
+        </main>
+        <AiModelDialog
+          open={aiDialogOpen}
+          isDesktop={Boolean(window.desktopPet)}
+          usingGeneratedModel={modelUrl !== defaultModelUrl}
+          onClose={() => setAiDialogOpen(false)}
+          onModelReady={useGeneratedModel}
+          onUseDefault={useDefaultModel}
+        />
+      </>
     );
   }
 
@@ -346,6 +392,14 @@ export function App() {
           <span>捏捏宠</span>
         </a>
         <nav className="header-actions" aria-label="页面操作">
+          <button
+            className="control-button"
+            type="button"
+            onClick={() => setAiDialogOpen(true)}
+          >
+            <MagicWand size={18} weight="fill" />
+            AI 生成
+          </button>
           <button
             className="icon-button"
             type="button"
@@ -472,6 +526,14 @@ export function App() {
           </div>
         </section>
       </main>
+      <AiModelDialog
+        open={aiDialogOpen}
+        isDesktop={false}
+        usingGeneratedModel={modelUrl !== defaultModelUrl}
+        onClose={() => setAiDialogOpen(false)}
+        onModelReady={useGeneratedModel}
+        onUseDefault={useDefaultModel}
+      />
     </div>
   );
 }

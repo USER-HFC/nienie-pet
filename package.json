@@ -5,11 +5,13 @@
   "type": "module",
   "main": "electron/main.mjs",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "concurrently -k \"node server/main.mjs\" \"vite --host 127.0.0.1\"",
     "desktop:dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron . --dev\"",
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit && vite build",
-    "desktop": "npm run build && electron ."
+    "desktop": "npm run build && electron .",
+    "web": "npm run build && node server/main.mjs",
+    "web:server": "node server/main.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
