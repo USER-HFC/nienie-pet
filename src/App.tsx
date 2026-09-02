@@ -388,7 +388,7 @@ export function App() {
     <div className={`app-shell is-${mode}`}>
       <header className="site-header">
         <a className="brand" href="/" aria-label="捏捏宠首页">
-          <span className="brand-mark" aria-hidden="true">捏</span>
+          <img className="brand-mark" src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" />
           <span>捏捏宠</span>
         </a>
         <nav className="header-actions" aria-label="页面操作">
