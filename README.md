@@ -5,7 +5,7 @@
 <h1 align="center">捏捏宠 · Nienie Pet</h1>
 
 <p align="center">
-  一个能抓、能捏、会流动的 3D 网页实验与透明桌宠。
+  一个能抓、能捏、会流动的 3D 网页实验与桌宠模式。
 </p>
 
 <p align="center">
@@ -16,7 +16,9 @@
   <img alt="BYOK" src="https://img.shields.io/badge/AI-BYOK-238A64" />
 </p>
 
-![捏捏宠网页工作台](./docs/media/hero.png)
+<p align="center">
+  <img src="./docs/media/hero.png" alt="捏捏宠桌宠模式" width="430" />
+</p>
 
 ## 项目简介
 
@@ -26,8 +28,10 @@
 
 ## 效果演示
 
+以下截图与录屏均来自 430 × 540 的桌宠模式窗口。
+
 <p align="center">
-  <img src="./docs/media/demo.gif" alt="捏捏、橡皮泥和液体三种模式录屏" width="900" />
+  <img src="./docs/media/demo.gif" alt="桌宠模式下捏捏、橡皮泥和液体三种交互录屏" width="430" />
 </p>
 
 <p align="center">
@@ -61,13 +65,15 @@
 | 液体效果 | 折射、色差、涡流、颗粒、晃动、点击冲击与轨道旋转 |
 | 交互反馈 | 可开关的抓点圆环与牵引方向线、状态提示、键盘与触控操作 |
 | 网页工作台 | 三模式切换、深浅主题、截图保存、响应式布局 |
-| Electron 桌宠 | 无边框透明窗口、置顶、托盘、隐藏、鼠标穿透、快捷键唤回 |
+| 桌宠模式 | Electron 无边框透明窗口、置顶、托盘、隐藏、鼠标穿透、快捷键唤回 |
 | AI 生成 | 腾讯混元 / Tripo，文字或单图生成约 10K 面 GLB |
 | BYOK 安全 | 桌面端使用系统加密存储；网页端不持久化 API Key |
 
 ## AI 生成桌宠
 
-![AI 图生模型界面](./docs/media/ai-generation.png)
+<p align="center">
+  <img src="./docs/media/ai-generation.png" alt="桌宠模式 AI 图生模型界面" width="430" />
+</p>
 
 点击页面或桌宠顶部的魔法棒按钮即可选择：
 
@@ -105,7 +111,7 @@ README 截图和录屏展示了本地调试时使用的奶龙模型。奶龙相�
 - Node.js 20.19+ 或 22.12+
 - npm
 - 支持 WebGL 的现代浏览器与显卡环境
-- Windows 10/11（透明桌宠模式）
+- Windows 10/11（桌宠模式）
 
 ### 1. 克隆与安装
 
@@ -138,7 +144,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5173/`。该命令会同时启动 Vite 和本地 AI API 代理。
 
-### 4. 启动透明桌宠
+### 4. 启动桌宠模式
 
 ```bash
 npm run desktop:dev
@@ -149,10 +155,10 @@ npm run desktop:dev
 | 命令 | 用途 |
 | --- | --- |
 | `npm run dev` | 启动 Vite 与网页 AI API 代理 |
-| `npm run desktop:dev` | 启动 Vite 与 Electron 桌宠 |
+| `npm run desktop:dev` | 启动 Vite 与 Electron 桌宠模式 |
 | `npm run typecheck` | 执行 TypeScript 类型检查 |
 | `npm run build` | 类型检查并生成生产构建 |
-| `npm run desktop` | 构建后启动 Electron 桌宠 |
+| `npm run desktop` | 构建后启动 Electron 桌宠模式 |
 | `npm run web` | 构建后启动网页生产服务 |
 | `npm run web:server` | 使用现有 `dist` 启动网页生产服务 |
 

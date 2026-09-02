@@ -275,7 +275,7 @@ export function App() {
       <>
         <main
           className={`desktop-pet is-${mode} ${windowFocused ? "is-window-focused" : "is-window-blurred"}`}
-          aria-label="捏捏宠桌面窗口"
+          aria-label="捏捏宠桌宠模式窗口"
         >
           <div className="desktop-drag-strip">
             <span>捏捏宠</span>
@@ -411,7 +411,7 @@ export function App() {
           </button>
           <a className="control-button" href="?desktop=1" target="_blank" rel="noreferrer">
             <DesktopTower size={18} />
-            预览桌宠
+            桌宠模式
           </a>
         </nav>
       </header>
