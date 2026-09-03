@@ -14,6 +14,7 @@
   <img alt="Electron" src="https://img.shields.io/badge/Electron-38-47848F?logo=electron&logoColor=white" />
   <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.9-3178C6?logo=typescript&logoColor=white" />
   <img alt="BYOK" src="https://img.shields.io/badge/AI-BYOK-238A64" />
+  <a href="./LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/License-MIT-f0d25b" /></a>
 </p>
 
 <p align="center">
@@ -217,6 +218,8 @@ nienie-pet/
 
 ## 许可证与第三方声明
 
-本仓库目前未附加项目级开源许可证。除第三方组件各自许可范围外，未经许可不代表授予复制、修改或分发本项目代码及演示素材的权利。
+除第三方组件与演示素材外，本项目代码采用 [MIT License](./LICENSE) 开源。
 
 Canvas UI 组件的版权、许可条件和 Commons Clause 限制见 [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md)。
+
+README 中展示的奶龙形象以及本地调试使用的模型、图标不在 MIT 授权范围内，相关权利归其权利人所有。
